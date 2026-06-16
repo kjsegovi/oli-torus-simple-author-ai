@@ -89,7 +89,7 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
       "forceProgress" => false,
       "default" => true,
       "correct" => true,
-      "conditions" => %{"all" => Enum.map(parts, &correct_condition/1)},
+      "conditions" => %{"all" => Enum.flat_map(parts, &correct_conditions/1)},
       "event" => %{
         "type" => "#{rule_id}.correct",
         "params" => %{
@@ -230,12 +230,130 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
 
   defp incorrect_nav_actions(_, feedback), do: [feedback_action(feedback)]
 
-  defp correct_condition(%{"id" => part_id}) do
-    %{"fact" => "stage.#{part_id}.isCorrect", "operator" => "equal", "value" => true}
+  defp correct_conditions(%{"id" => part_id, "type" => "janus-mcq", "custom" => custom}) do
+    [
+      %{
+        "fact" => "stage.#{part_id}.selectedChoice",
+        "operator" => "equal",
+        "value" => to_string(mcq_correct_choice(custom))
+      }
+    ]
   end
 
-  defp incorrect_condition(%{"id" => part_id}) do
-    %{"fact" => "stage.#{part_id}.isCorrect", "operator" => "equal", "value" => false}
+  defp correct_conditions(%{"id" => part_id, "type" => "janus-dropdown", "custom" => custom}) do
+    [
+      %{
+        "fact" => "stage.#{part_id}.selectedIndex",
+        "operator" => "equal",
+        "value" => to_string(dropdown_correct_index(custom)),
+        "type" => 1
+      }
+    ]
+  end
+
+  defp correct_conditions(%{"id" => part_id, "type" => "janus-text-slider", "custom" => custom}) do
+    [
+      %{
+        "fact" => "stage.#{part_id}.value",
+        "operator" => "equal",
+        "value" => to_string(numeric_correct_value(custom))
+      }
+    ]
+  end
+
+  defp correct_conditions(%{"id" => part_id, "type" => "janus-slider", "custom" => custom}) do
+    [
+      %{
+        "fact" => "stage.#{part_id}.value",
+        "operator" => "equal",
+        "value" => to_string(slider_correct_value(custom))
+      }
+    ]
+  end
+
+  defp correct_conditions(%{"id" => part_id, "type" => "janus-input-number", "custom" => custom}) do
+    [
+      %{
+        "fact" => "stage.#{part_id}.value",
+        "operator" => "equal",
+        "value" => to_string(numeric_correct_value(custom))
+      }
+    ]
+  end
+
+  defp correct_conditions(%{"id" => part_id, "type" => "janus-input-text", "custom" => custom}) do
+    text_input_correct_conditions(part_id, custom)
+  end
+
+  defp correct_conditions(%{"id" => part_id, "type" => type}) when type in @scorable_types do
+    [
+      %{
+        "fact" => "stage.#{part_id}.userModified",
+        "operator" => "equal",
+        "value" => "true",
+        "type" => 4
+      }
+    ]
+  end
+
+  defp incorrect_condition(%{"id" => part_id, "type" => "janus-mcq", "custom" => custom}) do
+    %{
+      "fact" => "stage.#{part_id}.selectedChoice",
+      "operator" => "notEqual",
+      "value" => to_string(mcq_correct_choice(custom))
+    }
+  end
+
+  defp incorrect_condition(%{"id" => part_id, "type" => "janus-dropdown", "custom" => custom}) do
+    %{
+      "fact" => "stage.#{part_id}.selectedIndex",
+      "operator" => "notEqual",
+      "value" => to_string(dropdown_correct_index(custom)),
+      "type" => 1
+    }
+  end
+
+  defp incorrect_condition(%{"id" => part_id, "type" => "janus-text-slider", "custom" => custom}) do
+    %{
+      "fact" => "stage.#{part_id}.value",
+      "operator" => "notEqual",
+      "value" => to_string(numeric_correct_value(custom))
+    }
+  end
+
+  defp incorrect_condition(%{"id" => part_id, "type" => "janus-slider", "custom" => custom}) do
+    %{
+      "fact" => "stage.#{part_id}.value",
+      "operator" => "notEqual",
+      "value" => to_string(slider_correct_value(custom))
+    }
+  end
+
+  defp incorrect_condition(%{"id" => part_id, "type" => "janus-input-number", "custom" => custom}) do
+    %{
+      "fact" => "stage.#{part_id}.value",
+      "operator" => "notEqual",
+      "value" => to_string(numeric_correct_value(custom))
+    }
+  end
+
+  defp incorrect_condition(%{"id" => part_id, "type" => "janus-input-text", "custom" => custom}) do
+    min_length = get_in(custom, ["correctAnswer", "minimumLength"]) || 1
+
+    %{
+      "fact" => "stage.#{part_id}.textLength",
+      "operator" => "greaterThanInclusive",
+      "value" => to_string(min_length)
+    }
+  end
+
+  defp incorrect_condition(%{"id" => part_id, "type" => type}) when type in @scorable_types do
+    %{
+      "fact" => "stage.#{part_id}.userModified",
+      "operator" => "equal",
+      "value" => "true",
+      "type" => 4
+    }
   end
 
   defp blank_condition(%{"id" => part_id, "type" => "janus-dropdown"}) do
@@ -311,10 +429,10 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
   defp common_error_condition(%{"id" => part_id, "type" => "janus-dropdown"}, option)
        when is_integer(option) do
     %{
-      "fact" => "stage.#{part_id}.selectedItem",
+      "fact" => "stage.#{part_id}.selectedIndex",
       "operator" => "equal",
       "value" => to_string(option),
-      "type" => 2
+      "type" => 1
     }
   end
 
@@ -327,8 +445,55 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
     }
   end
 
+  defp common_error_condition(part, nil), do: incorrect_condition(part)
+
   defp common_error_condition(_part, _option) do
     %{"fact" => "session.attemptNumber", "operator" => "equal", "value" => "-1"}
+  end
+
+  defp mcq_correct_choice(custom) do
+    Map.get(custom, "correctAnswer", 0) + 1
+  end
+
+  defp dropdown_correct_index(custom) do
+    Map.get(custom, "correctAnswer", 0) + 1
+  end
+
+  defp numeric_correct_value(custom) do
+    get_in(custom, ["answer", "correctAnswer"]) || 0
+  end
+
+  defp slider_correct_value(custom) do
+    get_in(custom, ["answer", "correct"]) || 0
+  end
+
+  defp text_input_correct_conditions(part_id, custom) do
+    must_contain = get_in(custom, ["correctAnswer", "mustContain"]) || ""
+    min_length = get_in(custom, ["correctAnswer", "minimumLength"]) || 1
+
+    required_terms =
+      must_contain
+      |> String.split(",")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+
+    required_conditions =
+      Enum.map(required_terms, fn term ->
+        %{
+          "fact" => "stage.#{part_id}.text",
+          "operator" => "contains",
+          "value" => term,
+          "type" => 2
+        }
+      end)
+
+    length_condition = %{
+      "fact" => "stage.#{part_id}.textLength",
+      "operator" => "greaterThanInclusive",
+      "value" => to_string(min_length)
+    }
+
+    required_conditions ++ [length_condition]
   end
 
   defp max_attempt_condition(max_attempt) do
@@ -438,6 +603,21 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
     ]
   end
 
+  defp set_correct_actions(%{"id" => part_id, "type" => "janus-dropdown", "custom" => custom}) do
+    [
+      %{
+        "type" => "mutateState",
+        "params" => %{
+          "value" => to_string(dropdown_correct_index(custom)),
+          "target" => "stage.#{part_id}.selectedIndex",
+          "operator" => "=",
+          "targetType" => 1
+        }
+      },
+      disable_part_action(part_id)
+    ]
+  end
+
   defp set_correct_actions(_), do: []
 
   defp disable_part_action(%{"id" => part_id}), do: disable_part_action(part_id)
@@ -536,11 +716,21 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
 
         Enum.find(parts, fn part ->
           label = get_in(part, ["custom", "label"]) || ""
-          normalize_label(label) == normalized_key
+          normalized_label = normalize_label(label)
+
+          normalized_label == normalized_key or
+            label_abbreviation(label) == normalized_key or
+            String.contains?(normalized_label, normalized_key)
         end)
 
       Map.has_key?(error_spec, "option") or Map.has_key?(error_spec, :option) ->
-        Enum.find(parts, &(&1["type"] == "janus-mcq"))
+        case Enum.filter(parts, &(&1["type"] in ["janus-mcq", "janus-dropdown"])) do
+          [part] ->
+            part
+
+          matching_parts ->
+            Enum.find(matching_parts, &(&1["type"] == "janus-mcq")) || List.first(matching_parts)
+        end
 
       true ->
         name = Map.get(error_spec, "name") || Map.get(error_spec, :name) || ""
@@ -566,6 +756,14 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
     |> String.replace(~r/[^a-z0-9\s]/, " ")
     |> String.replace(~r/\s+/, " ")
     |> String.trim()
+  end
+
+  defp label_abbreviation(label) do
+    label
+    |> normalize_label()
+    |> String.split(" ", trim: true)
+    |> Enum.map(&String.first/1)
+    |> Enum.join()
   end
 
   defp find_scorable_part(%{"id" => id}, parts_layout) do

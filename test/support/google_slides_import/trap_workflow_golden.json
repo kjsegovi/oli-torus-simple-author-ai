@@ -8,7 +8,7 @@
     "default-incorrect"
   ],
   "optionalRulePrefixes": ["common-error-"],
-  "correctRuleFacts": ["stage.{partId}.isCorrect"],
+  "correctRuleFacts": ["stage.{partId}.selectedChoice"],
   "maxAttemptCondition": {
     "fact": "session.attemptNumber",
     "operator": "equal"

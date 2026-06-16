@@ -35,7 +35,7 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilderTest do
     assert Enum.any?(rule_names, &String.starts_with?(&1, "common-error-"))
 
     correct_rule = Enum.find(rules, &(&1["name"] == "correct"))
-    assert get_in(correct_rule, ["conditions", "all", Access.at(0), "fact"]) =~ ".isCorrect"
+    assert get_in(correct_rule, ["conditions", "all", Access.at(0), "fact"]) =~ ".selectedChoice"
 
     max_attempt_rule = Enum.find(rules, &(&1["name"] == "incorrect-max-attempt"))
     assert get_in(max_attempt_rule, ["event", "params", "actions"]) != []
@@ -118,5 +118,69 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilderTest do
 
     assert length(rules) == 2
     assert Enum.all?(rules, &Map.has_key?(&1, "default"))
+  end
+
+  test "build_rules/3 uses selectedIndex conditions for dropdown trap workflow" do
+    specs = [
+      %{
+        "component" => "janus-dropdown",
+        "label" => "Independent Variable",
+        "optionLabels" => ["Type of media framing", "Level of trust in police"],
+        "correct" => 0
+      },
+      %{
+        "component" => "janus-dropdown",
+        "label" => "Dependent Variable",
+        "optionLabels" => ["Type of media framing", "Level of trust in police"],
+        "correct" => 1
+      }
+    ]
+
+    parts = Enum.map(specs, &PartBuilders.dropdown_part(&1, y: 100))
+
+    adaptivity = %{
+      "maxAttempt" => 3,
+      "commonErrors" => [
+        %{"partKey" => "IV", "feedback" => "The independent variable is manipulated."},
+        %{"partKey" => "DV", "feedback" => "The dependent variable is measured."}
+      ]
+    }
+
+    rules = TrapStateRulesBuilder.build_rules(adaptivity, hd(parts), parts, parts)
+
+    correct_rule = Enum.find(rules, &(&1["name"] == "correct"))
+    facts = get_in(correct_rule, ["conditions", "all"]) |> Enum.map(& &1["fact"])
+
+    assert Enum.all?(facts, &String.contains?(&1, ".selectedIndex"))
+    refute Enum.any?(facts, &String.contains?(&1, ".isCorrect"))
+
+    iv_part = Enum.find(parts, &(&1["custom"]["label"] == "Independent Variable"))
+    dv_part = Enum.find(parts, &(&1["custom"]["label"] == "Dependent Variable"))
+
+    assert Enum.any?(get_in(correct_rule, ["conditions", "all"]), fn condition ->
+             condition["fact"] == "stage.#{iv_part["id"]}.selectedIndex" and
+               condition["value"] == "1"
+           end)
+
+    assert Enum.any?(get_in(correct_rule, ["conditions", "all"]), fn condition ->
+             condition["fact"] == "stage.#{dv_part["id"]}.selectedIndex" and
+               condition["value"] == "2"
+           end)
+
+    iv_error = Enum.find(rules, &(&1["name"] == "common-error-1"))
+    iv_fact = get_in(iv_error, ["conditions", "all", Access.at(1), "fact"])
+    assert iv_fact == "stage.#{iv_part["id"]}.selectedIndex"
+
+    max_attempt_rule = Enum.find(rules, &(&1["name"] == "incorrect-max-attempt"))
+
+    set_index_actions =
+      max_attempt_rule
+      |> get_in(["event", "params", "actions"])
+      |> Enum.filter(fn action ->
+        target = get_in(action, ["params", "target"])
+        is_binary(target) and String.contains?(target, ".selectedIndex")
+      end)
+
+    assert length(set_index_actions) == 2
   end
 end
