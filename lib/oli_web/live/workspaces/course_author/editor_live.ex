@@ -11,6 +11,8 @@ defmodule OliWeb.Workspaces.CourseAuthor.Curriculum.EditorLive do
   alias Oli.Publishing
   alias Oli.Publishing.AuthoringResolver
   alias Oli.Resources
+  alias Oli.GoogleSlides.SlidesImport
+  alias Oli.ScopedFeatureFlags
   alias OliWeb.Common.Breadcrumb
   alias OliWeb.Common.React
   alias OliWeb.Components.Modal
@@ -810,7 +812,9 @@ defmodule OliWeb.Workspaces.CourseAuthor.Curriculum.EditorLive do
               activityTypes: activity_types,
               partComponentTypes: part_component_types,
               appsignalKey: Application.get_env(:appsignal, :client_key),
-              initialSidebarExpanded: socket.assigns[:sidebar_expanded]
+              initialSidebarExpanded: socket.assigns[:sidebar_expanded],
+              googleSlidesImport:
+                google_slides_import_props(project, socket.assigns.current_author)
             })
 
           {updated_content, ["authoring.js"] ++ activity_type_scripts}
@@ -982,6 +986,11 @@ defmodule OliWeb.Workspaces.CourseAuthor.Curriculum.EditorLive do
        }),
        do: "expert"
 
+  defp creation_mode_hint(%{"creation_mode" => "flowchart"}, %{
+         content: %{"advancedAuthoring" => true}
+       }),
+       do: "flowchart"
+
   defp creation_mode_hint(_params, _context), do: nil
 
   defp preview_url(%{assigns: %{context: %{content: %{"advancedDelivery" => true}}}} = socket),
@@ -1124,5 +1133,15 @@ defmodule OliWeb.Workspaces.CourseAuthor.Curriculum.EditorLive do
       <% end %>
     </nav>
     """
+  end
+
+  defp google_slides_import_props(project, author) do
+    enabled = ScopedFeatureFlags.enabled?(:google_slides_import, project)
+    available = enabled and SlidesImport.import_available?(project, author)
+
+    %{
+      enabled: enabled,
+      available: available
+    }
   end
 end

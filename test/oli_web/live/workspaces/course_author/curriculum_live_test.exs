@@ -292,10 +292,10 @@ defmodule OliWeb.Workspaces.CourseAuthor.CurriculumLiveTest do
       {path, _flash} = assert_redirect(view)
 
       assert path ==
-               "/workspaces/course_author/#{project.slug}/curriculum/#{new_adaptive_page.slug}/edit"
+               "/workspaces/course_author/#{project.slug}/curriculum/#{new_adaptive_page.slug}/edit?creation_mode=flowchart"
 
       assert new_adaptive_page.title == "New Simple Author Page"
-      assert get_in(new_adaptive_page.content, ["custom", "contentMode"]) == "flowchart"
+      refute Map.has_key?(new_adaptive_page.content["custom"] || %{}, "contentMode")
 
       assert get_in(new_adaptive_page.content, ["additionalStylesheets"]) == [
                "/css/delivery_adaptive_themes_flowchart.css"
@@ -326,10 +326,10 @@ defmodule OliWeb.Workspaces.CourseAuthor.CurriculumLiveTest do
       {path, _flash} = assert_redirect(view)
 
       assert path ==
-               "/workspaces/course_author/#{project.slug}/curriculum/#{new_adaptive_page.slug}/edit"
+               "/workspaces/course_author/#{project.slug}/curriculum/#{new_adaptive_page.slug}/edit?creation_mode=expert"
 
       assert new_adaptive_page.title == "New Advanced Author Page"
-      assert get_in(new_adaptive_page.content, ["custom", "contentMode"]) == "expert"
+      refute Map.has_key?(new_adaptive_page.content["custom"] || %{}, "contentMode")
 
       assert get_in(new_adaptive_page.content, ["additionalStylesheets"]) == [
                "/css/delivery_adaptive_themes_default_light.css"

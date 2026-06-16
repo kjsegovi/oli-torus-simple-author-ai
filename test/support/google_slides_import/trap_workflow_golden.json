@@ -1,0 +1,21 @@
+{
+  "description": "Expected trap-state rule names for a 3-try MCQ import workflow",
+  "maxAttempt": 3,
+  "requiredRuleNames": [
+    "correct",
+    "blank",
+    "incorrect-max-attempt",
+    "default-incorrect"
+  ],
+  "optionalRulePrefixes": ["common-error-"],
+  "correctRuleFacts": ["stage.{partId}.isCorrect"],
+  "maxAttemptCondition": {
+    "fact": "session.attemptNumber",
+    "operator": "equal"
+  },
+  "blankMcqCondition": {
+    "fact": "stage.{partId}.numberOfSelectedChoices",
+    "operator": "equal",
+    "value": "0"
+  }
+}

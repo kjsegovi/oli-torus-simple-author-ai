@@ -29,6 +29,8 @@ defmodule Oli.MCP.Server do
   component(Oli.MCP.Tools.ActivityValidationTool)
   component(Oli.MCP.Tools.ActivityTestEvalTool)
   component(Oli.MCP.Tools.CreateActivityTool)
+  component(Oli.MCP.Tools.ImportGoogleSlidesTool)
+  component(Oli.MCP.Tools.CreateAdaptiveScreenTool)
 
   @impl true
   def init(_arg, frame) do

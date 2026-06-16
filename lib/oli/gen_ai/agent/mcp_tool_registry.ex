@@ -100,6 +100,50 @@ defmodule Oli.GenAI.Agent.MCPToolRegistry do
           },
           "required" => ["project_slug", "activity_json", "activity_type_slug"]
         }
+      },
+      "import_google_slides" => %{
+        name: "import_google_slides",
+        desc: "Import a public Google Slides presentation into an adaptive page",
+        schema: %{
+          "type" => "object",
+          "properties" => %{
+            "project_slug" => %{
+              "type" => "string",
+              "description" => "Project slug containing the adaptive page"
+            },
+            "page_slug" => %{
+              "type" => "string",
+              "description" => "Adaptive page revision slug to populate"
+            },
+            "presentation_url" => %{
+              "type" => "string",
+              "description" => "Public Google Slides presentation URL"
+            }
+          },
+          "required" => ["project_slug", "page_slug", "presentation_url"]
+        }
+      },
+      "create_adaptive_screen" => %{
+        name: "create_adaptive_screen",
+        desc: "Create a single adaptive screen (oli_adaptive activity) from JSON content",
+        schema: %{
+          "type" => "object",
+          "properties" => %{
+            "project_slug" => %{
+              "type" => "string",
+              "description" => "Project slug where the screen will be created"
+            },
+            "title" => %{
+              "type" => "string",
+              "description" => "Screen title"
+            },
+            "screen_json" => %{
+              "type" => "string",
+              "description" => "JSON string for the oli_adaptive activity content model"
+            }
+          },
+          "required" => ["project_slug", "title", "screen_json"]
+        }
       }
     }
   end
@@ -225,6 +269,8 @@ defmodule Oli.GenAI.Agent.MCPToolRegistry do
       "activity_validation" -> Oli.MCP.Tools.ActivityValidationTool
       "activity_test_eval" -> Oli.MCP.Tools.ActivityTestEvalTool
       "create_activity" -> Oli.MCP.Tools.CreateActivityTool
+      "import_google_slides" -> Oli.MCP.Tools.ImportGoogleSlidesTool
+      "create_adaptive_screen" -> Oli.MCP.Tools.CreateAdaptiveScreenTool
       _ -> nil
     end
   end

@@ -260,13 +260,13 @@ defmodule Oli.Authoring.Editing.ContainerEditor do
 
   defp page_content("Adaptive", "flowchart") do
     @adaptive_content_defaults
-    |> Map.put("custom", @flowchart_custom_defaults)
+    |> Map.put("custom", Map.delete(@flowchart_custom_defaults, "contentMode"))
     |> Map.put("additionalStylesheets", ["/css/delivery_adaptive_themes_flowchart.css"])
   end
 
   defp page_content("Adaptive", "expert") do
     @adaptive_content_defaults
-    |> Map.put("custom", @expert_custom_defaults)
+    |> Map.put("custom", Map.delete(@expert_custom_defaults, "contentMode"))
     |> Map.put("additionalStylesheets", ["/css/delivery_adaptive_themes_default_light.css"])
   end
 

@@ -69,7 +69,7 @@ defmodule OliWeb.Curriculum.Rollup do
     old_activity = Map.get(struct.activity_map, revision.resource_id)
 
     get_objectves = fn %{objectives: objectives} ->
-      Enum.map(objectives, fn {_, ids} -> ids end) |> List.flatten() |> MapSet.new()
+      objectives |> objective_ids_from_map() |> MapSet.new()
     end
 
     old_objectives = get_objectves.(old_activity)
@@ -136,11 +136,21 @@ defmodule OliWeb.Curriculum.Rollup do
   defp build_objective_map(project_slug, activity_map) do
     all_objectives =
       Enum.reduce(activity_map, [], fn {_, %{objectives: objectives}}, all ->
-        (Enum.map(objectives, fn {_, ids} -> ids end) |> List.flatten()) ++ all
+        objective_ids_from_map(objectives) ++ all
       end)
+      |> Enum.uniq()
 
     AuthoringResolver.from_resource_id(project_slug, all_objectives)
     |> Enum.filter(fn r -> !is_nil(r) end)
     |> Enum.reduce(%{}, fn a, m -> Map.put(m, a.resource_id, a) end)
   end
+
+  defp objective_ids_from_map(objectives) when is_map(objectives) do
+    objectives
+    |> Map.values()
+    |> List.flatten()
+    |> Enum.filter(&is_integer/1)
+  end
+
+  defp objective_ids_from_map(_), do: []
 end

@@ -137,5 +137,50 @@ defmodule OliWeb.Curriculum.RollupTest do
       assert Map.keys(rollup.activity_map) |> length == 2
       assert Map.keys(rollup.objective_map) |> length == 2
     end
+
+    test "ignores malformed objective ids in activity objectives", %{project: project} = map do
+      content = %{
+        "stem" => "1",
+        "authoring" => %{
+          "parts" => [
+            %{
+              "id" => "1",
+              "responses" => [],
+              "scoringStrategy" => "best",
+              "evaluationStrategy" => "regex"
+            }
+          ]
+        }
+      }
+
+      map =
+        map
+        |> Seeder.add_activity(
+          %{
+            objectives: %{"1" => %{}},
+            title: "malformed objectives",
+            content: content
+          },
+          :bad_activity
+        )
+
+      attrs = %{
+        title: "page with malformed objectives",
+        content: %{
+          "model" => [
+            %{
+              "type" => "activity-reference",
+              "activity_id" => Map.get(map, :bad_activity).revision.resource_id
+            }
+          ]
+        }
+      }
+
+      map = Seeder.add_page(map, attrs, :bad_page)
+      page = Map.get(map, :bad_page).revision
+
+      assert {:ok, rollup} = Rollup.new([page], project.slug)
+      assert Map.keys(rollup.objective_map) == []
+    end
   end
 end

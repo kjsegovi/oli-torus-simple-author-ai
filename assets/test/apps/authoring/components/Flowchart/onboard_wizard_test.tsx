@@ -31,7 +31,47 @@ describe('OnboardWizard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Next/i }));
 
+    expect(screen.getByRole('heading', { name: 'Choose a starting point' })).toBeInTheDocument();
+    expect(onSetupComplete).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+
     expect(onSetupComplete).toHaveBeenCalledWith('expert', 'New Adaptive Page');
     expect(screen.getByRole('heading', { name: 'Opening in Edit Mode' })).toBeInTheDocument();
+  });
+
+  test('shows import as unavailable in compact expert flow when Google Slides import is disabled', () => {
+    render(
+      <OnboardWizard
+        onSetupComplete={jest.fn()}
+        initialTitle="Imported Lesson"
+        presetMode="expert"
+        googleSlidesImport={{ enabled: false, available: false }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+
+    expect(screen.getByText('Import Google Slides')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Google Slides import is not enabled for this project/i),
+    ).toBeInTheDocument();
+  });
+
+  test('shows import option in compact expert flow when Google Slides import is available', () => {
+    render(
+      <OnboardWizard
+        onSetupComplete={jest.fn()}
+        onImportComplete={jest.fn()}
+        initialTitle="Imported Lesson"
+        presetMode="expert"
+        googleSlidesImport={{ enabled: true, available: true }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+
+    expect(screen.getByRole('heading', { name: 'Choose a starting point' })).toBeInTheDocument();
+    expect(screen.getByText('Import Google Slides')).toBeInTheDocument();
   });
 });

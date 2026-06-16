@@ -648,11 +648,20 @@ defmodule OliWeb.Curriculum.ContainerLive do
      )}
   end
 
-  defp handle_created_revision(socket, _type, slug, _adaptive_mode) do
+  defp handle_created_revision(socket, _type, slug, adaptive_mode) do
     {:noreply,
      redirect(socket,
-       to: Routes.resource_path(socket, :edit, socket.assigns.project.slug, slug)
+       to: resource_edit_path(socket, slug, adaptive_mode)
      )}
+  end
+
+  defp resource_edit_path(socket, slug, adaptive_mode) when adaptive_mode in ["flowchart", "expert"] do
+    Routes.resource_path(socket, :edit, socket.assigns.project.slug, slug) <>
+      "?creation_mode=" <> adaptive_mode
+  end
+
+  defp resource_edit_path(socket, slug, _adaptive_mode) do
+    Routes.resource_path(socket, :edit, socket.assigns.project.slug, slug)
   end
 
   defp creating_assign("Container"), do: :creating_container

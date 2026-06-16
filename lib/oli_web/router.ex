@@ -709,6 +709,14 @@ defmodule OliWeb.Router do
     get("/:project/alternatives", Api.ResourceController, :alternatives)
 
     get("/:project/activities/with_report", Api.ResourceController, :activities_with_report)
+
+    get("/:project/google_slides_import/status", Api.GoogleSlidesImportController, :status)
+
+    post(
+      "/:project/resource/:resource/google_slides_import",
+      Api.GoogleSlidesImportController,
+      :create
+    )
   end
 
   # Storage Service

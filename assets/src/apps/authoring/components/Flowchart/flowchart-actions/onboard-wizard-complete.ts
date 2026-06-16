@@ -3,6 +3,7 @@ import { acquireLock } from '../../../../../data/persistence/lock';
 import { edit } from '../../../../../data/persistence/resource';
 import { cloneT } from '../../../../../utils/common';
 import { ApplicationMode } from '../../../store/app/slice';
+import { authoringEditorUrl } from '../../../utils/authoringEditorUrl';
 
 /**
  * Logic for applying the onboarding wizard.
@@ -54,7 +55,7 @@ export const onboardWizardComplete = async (
       throw new Error('Could not save page');
     }
     const { revision_slug } = saveResult;
-    window.location.href = `./${revision_slug}`;
+    window.location.assign(authoringEditorUrl(revision_slug));
   } catch (e) {
     console.error(e);
     throw e;

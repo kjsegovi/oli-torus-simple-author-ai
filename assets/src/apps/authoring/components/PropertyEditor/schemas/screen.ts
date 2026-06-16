@@ -315,27 +315,34 @@ export const transformScreenModeltoSchema = (activity?: IActivity, responsiveLay
     }
 
     let backgroundColor = `rgba(255, 255, 255, 100)`;
+    const palette = data.palette ?? {
+      backgroundColor: 'rgba(255,255,255,0)',
+      borderColor: 'rgba(255,255,255,0)',
+      borderStyle: 'solid',
+      borderWidth: '1px',
+      useHtmlProps: true,
+    };
 
-    if (!data.palette.useHTMLProps) {
-      if (data.palette.backgroundColor) {
-        backgroundColor = data.palette.backgroundColor;
-      } else if (data.palette.fillColor || data.palette.fillColor === 0) {
-        backgroundColor = `rgba(${chroma(data.palette.fillColor).rgb().join(',')},${
-          data.palette.fillAlpha || '100'
+    if (!palette.useHTMLProps && !palette.useHtmlProps) {
+      if (palette.backgroundColor) {
+        backgroundColor = palette.backgroundColor;
+      } else if (palette.fillColor || palette.fillColor === 0) {
+        backgroundColor = `rgba(${chroma(palette.fillColor).rgb().join(',')},${
+          palette.fillAlpha || '100'
         })`;
       }
     }
 
     const schemaPalette = {
-      ...data.palette,
-      borderWidth: `${data.palette.lineThickness ? data.palette.lineThickness + 'px' : '1px'}`,
+      ...palette,
+      borderWidth: `${palette.lineThickness ? palette.lineThickness + 'px' : '1px'}`,
       borderRadius: '10px',
-      borderStyle: normalizeBorderStyle(data.palette.borderStyle ?? 'solid'),
+      borderStyle: normalizeBorderStyle(palette.borderStyle ?? 'solid'),
       borderColor: `rgba(${
-        data.palette.lineColor || data.palette.lineColor === 0
-          ? chroma(data.palette.lineColor).rgb().join(',')
+        palette.lineColor || palette.lineColor === 0
+          ? chroma(palette.lineColor).rgb().join(',')
           : '255, 255, 255'
-      },${data.palette.lineAlpha || '100'})`,
+      },${palette.lineAlpha || '100'})`,
       backgroundColor,
     };
     return {
@@ -347,8 +354,8 @@ export const transformScreenModeltoSchema = (activity?: IActivity, responsiveLay
       },
       checkButton: { showCheckBtn: data.showCheckBtn, checkButtonLabel: data.checkButtonLabel },
       max: { maxAttempt: data.maxAttempt, maxScore: data.maxScore },
-      palette: data.palette.useHtmlProps
-        ? { ...data.palette, borderStyle: normalizeBorderStyle(data.palette.borderStyle) }
+      palette: palette.useHtmlProps || palette.useHTMLProps
+        ? { ...palette, borderStyle: normalizeBorderStyle(palette.borderStyle) }
         : schemaPalette,
       learningObjectives: Object.values(activity?.objectives || {}).flat(),
     };

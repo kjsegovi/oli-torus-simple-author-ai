@@ -1,0 +1,54 @@
+{
+  "presentationId": "abc123",
+  "title": "Sample Lesson",
+  "slides": [
+    {
+      "objectId": "slide1",
+      "pageElements": [
+        {
+          "objectId": "title1",
+          "shape": {
+            "placeholder": { "type": "TITLE" },
+            "text": {
+              "textElements": [
+                { "textRun": { "content": "Welcome Slide" } }
+              ]
+            }
+          }
+        },
+        {
+          "objectId": "body1",
+          "shape": {
+            "text": {
+              "textElements": [
+                { "textRun": { "content": "Intro paragraph text." } }
+              ]
+            }
+          }
+        }
+      ],
+      "slideProperties": {
+        "notesPage": { "objectId": "notes1" }
+      }
+    },
+    {
+      "objectId": "slide2",
+      "pageElements": [
+        {
+          "objectId": "title2",
+          "shape": {
+            "placeholder": { "type": "TITLE" },
+            "text": {
+              "textElements": [
+                { "textRun": { "content": "Question Slide" } }
+              ]
+            }
+          }
+        }
+      ],
+      "slideProperties": {
+        "notesPage": { "objectId": "notes2" }
+      }
+    }
+  ]
+}

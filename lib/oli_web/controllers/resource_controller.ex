@@ -104,6 +104,11 @@ defmodule OliWeb.ResourceController do
        }),
        do: "expert"
 
+  defp creation_mode_hint(%{"creation_mode" => "flowchart"}, %{
+         content: %{"advancedAuthoring" => true}
+       }),
+       do: "flowchart"
+
   defp creation_mode_hint(_params, _context), do: nil
 
   defp preview_advanced(conn, author, project, revision) do

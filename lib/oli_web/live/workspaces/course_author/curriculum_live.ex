@@ -1044,12 +1044,21 @@ defmodule OliWeb.Workspaces.CourseAuthor.CurriculumLive do
      )}
   end
 
-  defp handle_created_revision(socket, _type, slug, _adaptive_mode) do
+  defp handle_created_revision(socket, _type, slug, adaptive_mode) do
     {:noreply,
      redirect(
        socket,
-       to: Routes.live_path(socket, EditorLive, socket.assigns.project.slug, slug)
+       to: editor_path(socket, slug, adaptive_mode)
      )}
+  end
+
+  defp editor_path(socket, slug, adaptive_mode) when adaptive_mode in ["flowchart", "expert"] do
+    Routes.live_path(socket, EditorLive, socket.assigns.project.slug, slug) <>
+      "?creation_mode=" <> adaptive_mode
+  end
+
+  defp editor_path(socket, slug, _adaptive_mode) do
+    Routes.live_path(socket, EditorLive, socket.assigns.project.slug, slug)
   end
 
   defp creating_assign("Container"), do: :creating_container

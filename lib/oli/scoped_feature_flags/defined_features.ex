@@ -49,6 +49,12 @@ defmodule Oli.ScopedFeatureFlags.DefinedFeatures do
   )
 
   deffeature(
+    :google_slides_import,
+    [:authoring],
+    "Enable importing adaptive lessons from Google Slides in Advanced Author"
+  )
+
+  deffeature(
     :google_docs_import,
     [:authoring],
     "Enable importing pages from Google Docs in curriculum authoring"

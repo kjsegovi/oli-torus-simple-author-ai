@@ -15,6 +15,7 @@ defmodule OliWeb.Workspaces.CourseAuthor.OverviewLive do
   alias Oli.Publishing.AuthoringResolver
   alias Oli.Resources.Collaboration
   alias Oli.ScopedFeatureFlags
+  alias Oli.GoogleSlides.Credentials
   alias OliWeb.Common.Utils
   alias OliWeb.Components.{Common, Modal, Overview}
   alias OliWeb.Components.Project.{AdvancedActivityItem, AsyncExporter}
@@ -101,7 +102,11 @@ defmodule OliWeb.Workspaces.CourseAuthor.OverviewLive do
         course_sections_limit: @course_sections_limit,
         course_sections_sort_by: :title,
         course_sections_sort_order: :asc,
-        course_sections_project_id: project.id
+        course_sections_project_id: project.id,
+        google_slides_client_email: Credentials.get_client_email(project.id),
+        google_slides_credential_source: Credentials.credential_source(project.id),
+        google_slides_import_enabled:
+          ScopedFeatureFlags.enabled?(:google_slides_import, project)
       )
       |> assign_async(:course_sections_data, fn ->
         load_course_sections_data(project.id, ctx, 0, @course_sections_limit, :asc, :title, "")
@@ -275,6 +280,22 @@ defmodule OliWeb.Workspaces.CourseAuthor.OverviewLive do
           </div>
 
           {submit("Save", class: "btn btn-md btn-primary mt-2")}
+        </Overview.section>
+        <Overview.section
+          :if={@google_slides_import_enabled}
+          title="Google Slides Import"
+          description="Authors can import public Google Slides into Advanced Author lessons when the server is configured with a Google service account."
+        >
+          <div class="form-label-group mb-3">
+            <label class="control-label">Status</label>
+            <p class="text-secondary mb-2">
+              {google_slides_status_message(@google_slides_credential_source)}
+            </p>
+          </div>
+          <div :if={@google_slides_client_email} class="form-label-group mb-3">
+            <label class="control-label">Service Account Client Email</label>
+            <p class="text-secondary mb-2">{@google_slides_client_email}</p>
+          </div>
         </Overview.section>
         <Overview.section
           title="Project Attributes"
@@ -1073,4 +1094,13 @@ defmodule OliWeb.Workspaces.CourseAuthor.OverviewLive do
 
   defp decode_welcome_title(project_params),
     do: Map.update(project_params, "welcome_title", nil, &Poison.decode!(&1))
+
+  defp google_slides_status_message(:global),
+    do: "Configured via server environment (GOOGLE_SLIDES_SERVICE_ACCOUNT_JSON_B64)."
+
+  defp google_slides_status_message(:project),
+    do: "Configured with a project-specific service account override."
+
+  defp google_slides_status_message(_),
+    do: "Not configured. Set GOOGLE_SLIDES_SERVICE_ACCOUNT_JSON_B64 in the server environment."
 end

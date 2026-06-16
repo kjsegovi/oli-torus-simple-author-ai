@@ -14,6 +14,7 @@ import { AuthoringFlowchartPageEditor } from './AuthoringFlowchartPageEditor';
 import { ModalContainer } from './components/AdvancedAuthoringModal';
 import { FlowchartEditor } from './components/Flowchart/FlowchartEditor';
 import { onboardWizardComplete } from './components/Flowchart/flowchart-actions/onboard-wizard-complete';
+import { onboardWizardImportComplete } from './components/Flowchart/flowchart-actions/onboard-wizard-import-complete';
 import { verifyFlowchartLesson } from './components/Flowchart/flowchart-actions/verify-flowchart-lesson';
 import { OnboardWizard } from './components/Flowchart/onboard-wizard/OnboardWizard';
 import { validateScreen } from './components/Flowchart/screens/screen-validation';
@@ -58,6 +59,10 @@ export interface AuthoringProps {
   paths: Record<string, string>;
   appsignalKey: string | null;
   initialSidebarExpanded: boolean;
+  googleSlidesImport?: {
+    enabled: boolean;
+    available: boolean;
+  };
 }
 
 export const buildAdaptivePreviewUrl = (url: string, currentSequenceId?: string | null) => {
@@ -149,9 +154,11 @@ const Authoring: React.FC<AuthoringProps> = (props: AuthoringProps) => {
   const shouldShowPageEditor = readyToEdit && (editingMode === 'page' || isExpertMode);
   const shouldShowFlowchartEditor = readyToEdit && editingMode === 'flowchart';
 
-  const shouldShowOnboarding =
+  const needsOnboarding =
     props.content.content?.custom?.contentMode === undefined &&
     props.content.content?.model?.length === 0;
+
+  const shouldShowOnboarding = needsOnboarding;
 
   const panelState = {
     left: leftPanelState,
@@ -185,6 +192,24 @@ const Authoring: React.FC<AuthoringProps> = (props: AuthoringProps) => {
     const projectSlug = props.content.projectSlug || '';
     props.content.allObjectives || [];
     onboardWizardComplete(title, projectSlug, revisionSlug, appMode, pageContent);
+  };
+
+  const onOnboardImportComplete = async (
+    appMode: ApplicationMode,
+    title: string,
+    presentationUrl: string,
+  ) => {
+    const { revisionSlug } = props;
+    const pageContent = props.content.content;
+    const projectSlug = props.content.projectSlug || '';
+    await onboardWizardImportComplete(
+      title,
+      projectSlug,
+      revisionSlug,
+      appMode,
+      pageContent,
+      presentationUrl,
+    );
   };
 
   const handlePanelStateChange = ({
@@ -274,8 +299,16 @@ const Authoring: React.FC<AuthoringProps> = (props: AuthoringProps) => {
       partComponentTypes,
       activityTypes,
       allObjectives: content.allObjectives || [],
-      applicationMode:
-        content.content?.custom?.contentMode === 'flowchart' ? 'flowchart' : 'expert',
+      applicationMode: (() => {
+        const contentMode = content.content?.custom?.contentMode;
+        if (contentMode === 'flowchart') {
+          return 'flowchart';
+        }
+        if (contentMode === 'expert') {
+          return 'expert';
+        }
+        return props.creationModeHint || 'expert';
+      })(),
     };
     dispatch(setInitialConfig(appConfig));
   }, [
@@ -287,6 +320,7 @@ const Authoring: React.FC<AuthoringProps> = (props: AuthoringProps) => {
     partComponentTypes,
     paths,
     projectSlug,
+    props.creationModeHint,
     revisionSlug,
   ]);
 
@@ -334,7 +368,7 @@ const Authoring: React.FC<AuthoringProps> = (props: AuthoringProps) => {
         setIsLoading(true);
       }
 
-      if (content) {
+      if (content && !needsOnboarding) {
         const appConfig = {
           paths,
           isAdmin,
@@ -370,6 +404,7 @@ const Authoring: React.FC<AuthoringProps> = (props: AuthoringProps) => {
     hasReadonlyBootstrapActivities,
     isAdmin,
     isReadOnly,
+    needsOnboarding,
     partComponentTypes,
     paths,
     projectSlug,
@@ -573,8 +608,10 @@ const Authoring: React.FC<AuthoringProps> = (props: AuthoringProps) => {
           {shouldShowOnboarding && (
             <OnboardWizard
               onSetupComplete={onOnboardComplete}
+              onImportComplete={onOnboardImportComplete}
               initialTitle={props.content.title}
               presetMode={props.creationModeHint}
+              googleSlidesImport={props.googleSlidesImport}
             />
           )}
         </ModalContainer>
