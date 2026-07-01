@@ -1,5 +1,4 @@
 import {
-  IAction,
   IActivity,
   IAdaptiveRule,
   ICondition,
@@ -49,17 +48,6 @@ export const generateMultilineTextInputRules = (
       sequence,
     ) || sequence[0].custom.sequenceId;
 
-  const disableAction: IAction = {
-    // Disables the dropdown so the correct answer can be unselected
-    type: 'mutateState',
-    params: {
-      value: 'false',
-      target: `stage.${question.id}.enabled`,
-      operator: '=',
-      targetType: 4,
-    },
-  };
-
   rules.push(
     generateRule(
       'correct',
@@ -68,7 +56,7 @@ export const generateMultilineTextInputRules = (
       true,
       50,
       question.custom?.correctFeedback || DEFAULT_CORRECT_FEEDBACK,
-      [disableAction],
+      [],
       { default: true },
     ),
   );

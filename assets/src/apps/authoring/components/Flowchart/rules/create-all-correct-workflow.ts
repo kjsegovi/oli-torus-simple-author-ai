@@ -19,7 +19,6 @@ import { RulesAndVariables } from './rule-compilation';
 export const generateAllCorrectWorkflow = (
   defaultPath: Required<IConditionWithFeedback>,
   specificPaths: IConditionWithFeedback[],
-  disableAction: IAction,
   blankCondition: ICondition,
 ): RulesAndVariables => {
   const rules: IAdaptiveRule[] = [];
@@ -41,7 +40,7 @@ export const generateAllCorrectWorkflow = (
         true,
         30,
         path.feedback,
-        [disableAction],
+        [],
       ),
     );
   }
@@ -54,7 +53,7 @@ export const generateAllCorrectWorkflow = (
       false,
       50,
       defaultPath.feedback,
-      [disableAction],
+      [],
     ),
     default: true,
   });

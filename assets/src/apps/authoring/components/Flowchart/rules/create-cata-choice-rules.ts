@@ -104,17 +104,6 @@ export const generateCATAChoiceRules = (
     }
   });
 
-  const disableAction: IAction = {
-    // Disables the mcq so the correct answer can not be unselected
-    type: 'mutateState',
-    params: {
-      value: 'false',
-      target: `stage.${question.id}.enabled`,
-      operator: '=',
-      targetType: 4,
-    },
-  };
-
   const setCorrect: IAction[] = [
     {
       // Sets the correct answer
@@ -126,7 +115,6 @@ export const generateCATAChoiceRules = (
         targetType: 3,
       },
     },
-    disableAction,
   ];
 
   const blankCondition: ICondition = createCondition(
@@ -139,7 +127,7 @@ export const generateCATAChoiceRules = (
   const isAlwaysCorrect = !!question.custom?.anyCorrectAnswer;
 
   if (isAlwaysCorrect) {
-    return generateAllCorrectWorkflow(correct, [], disableAction, blankCondition);
+    return generateAllCorrectWorkflow(correct, [], blankCondition);
   }
 
   return generateMaxTryWorkflow(
@@ -148,7 +136,6 @@ export const generateCATAChoiceRules = (
     commonErrorConditionsFeedback,
     setCorrect,
     blankCondition,
-    disableAction,
     { maxAttempt: screen?.content?.custom?.maxAttempt || '3' },
   );
 };

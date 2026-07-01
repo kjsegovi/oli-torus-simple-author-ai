@@ -93,7 +93,7 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
       "event" => %{
         "type" => "#{rule_id}.correct",
         "params" => %{
-          "actions" => actions ++ Enum.map(parts, &disable_part_action/1)
+          "actions" => actions
         }
       }
     }
@@ -138,13 +138,6 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
   end
 
   defp max_attempt_incorrect_rule(rule_id, parts, max_attempt, actions) do
-    incorrect_conditions =
-      if length(parts) > 1 do
-        %{"any" => Enum.map(parts, &incorrect_condition/1)}
-      else
-        %{"all" => [incorrect_condition(hd(parts))]}
-      end
-
     %{
       "id" => "#{rule_id}.incorrect-max-attempt",
       "name" => "incorrect-max-attempt",
@@ -153,19 +146,49 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
       "forceProgress" => false,
       "default" => false,
       "correct" => false,
-      "conditions" => %{
-        "all" => [max_attempt_condition(max_attempt), incorrect_conditions]
-      },
+      "conditions" => max_attempt_conditions(parts, max_attempt),
       "event" => %{
         "type" => "#{rule_id}.incorrect-max-attempt",
         "params" => %{
           "actions" =>
             actions ++
-              Enum.flat_map(parts, &set_correct_actions/1) ++
+              Enum.flat_map(parts, &set_correct_value_actions/1) ++
               [feedback_action(@default_three_times_feedback)]
         }
       }
     }
+  end
+
+  defp max_attempt_conditions(parts, max_attempt) do
+    part_incorrect =
+      parts
+      |> Enum.flat_map(&max_attempt_incorrect_conditions/1)
+
+    base = [max_attempt_condition(max_attempt)]
+
+    case part_incorrect do
+      [] ->
+        %{"all" => base}
+
+      [single] ->
+        %{"all" => base ++ [single]}
+
+      many ->
+        if length(parts) > 1 do
+          %{"all" => base ++ [%{"any" => many}]}
+        else
+          %{"all" => base ++ many}
+        end
+    end
+  end
+
+  defp max_attempt_incorrect_conditions(%{"type" => "janus-input-text"}), do: []
+
+  defp max_attempt_incorrect_conditions(part) do
+    case incorrect_condition(part) do
+      nil -> []
+      condition -> [condition]
+    end
   end
 
   defp common_error_rules(rule_id, parts, error_spec, idx, max_attempt) do
@@ -252,33 +275,15 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
   end
 
   defp correct_conditions(%{"id" => part_id, "type" => "janus-text-slider", "custom" => custom}) do
-    [
-      %{
-        "fact" => "stage.#{part_id}.value",
-        "operator" => "equal",
-        "value" => to_string(numeric_correct_value(custom))
-      }
-    ]
+    numeric_value_conditions(part_id, Map.get(custom, "answer", %{}), false)
   end
 
   defp correct_conditions(%{"id" => part_id, "type" => "janus-slider", "custom" => custom}) do
-    [
-      %{
-        "fact" => "stage.#{part_id}.value",
-        "operator" => "equal",
-        "value" => to_string(slider_correct_value(custom))
-      }
-    ]
+    numeric_value_conditions(part_id, Map.get(custom, "answer", %{}), false)
   end
 
   defp correct_conditions(%{"id" => part_id, "type" => "janus-input-number", "custom" => custom}) do
-    [
-      %{
-        "fact" => "stage.#{part_id}.value",
-        "operator" => "equal",
-        "value" => to_string(numeric_correct_value(custom))
-      }
-    ]
+    numeric_value_conditions(part_id, Map.get(custom, "answer", %{}), false)
   end
 
   defp correct_conditions(%{"id" => part_id, "type" => "janus-input-text", "custom" => custom}) do
@@ -314,38 +319,27 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
   end
 
   defp incorrect_condition(%{"id" => part_id, "type" => "janus-text-slider", "custom" => custom}) do
-    %{
-      "fact" => "stage.#{part_id}.value",
-      "operator" => "notEqual",
-      "value" => to_string(numeric_correct_value(custom))
-    }
+    case numeric_value_conditions(part_id, Map.get(custom, "answer", %{}), true) do
+      [condition] -> condition
+      _ -> nil
+    end
   end
 
   defp incorrect_condition(%{"id" => part_id, "type" => "janus-slider", "custom" => custom}) do
-    %{
-      "fact" => "stage.#{part_id}.value",
-      "operator" => "notEqual",
-      "value" => to_string(slider_correct_value(custom))
-    }
+    case numeric_value_conditions(part_id, Map.get(custom, "answer", %{}), true) do
+      [condition] -> condition
+      _ -> nil
+    end
   end
 
   defp incorrect_condition(%{"id" => part_id, "type" => "janus-input-number", "custom" => custom}) do
-    %{
-      "fact" => "stage.#{part_id}.value",
-      "operator" => "notEqual",
-      "value" => to_string(numeric_correct_value(custom))
-    }
+    case numeric_value_conditions(part_id, Map.get(custom, "answer", %{}), true) do
+      [condition] -> condition
+      _ -> nil
+    end
   end
 
-  defp incorrect_condition(%{"id" => part_id, "type" => "janus-input-text", "custom" => custom}) do
-    min_length = get_in(custom, ["correctAnswer", "minimumLength"]) || 1
-
-    %{
-      "fact" => "stage.#{part_id}.textLength",
-      "operator" => "greaterThanInclusive",
-      "value" => to_string(min_length)
-    }
-  end
+  defp incorrect_condition(%{"type" => "janus-input-text"}), do: nil
 
   defp incorrect_condition(%{"id" => part_id, "type" => type}) when type in @scorable_types do
     %{
@@ -391,20 +385,22 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
     }
   end
 
-  defp blank_condition(%{"id" => part_id, "type" => "janus-input-text"}) do
+  defp blank_condition(%{"id" => part_id, "type" => "janus-input-text", "custom" => custom}) do
+    min_length = get_in(custom, ["correctAnswer", "minimumLength"]) || 1
+
     %{
       "fact" => "stage.#{part_id}.textLength",
-      "operator" => "equal",
-      "value" => "0"
+      "operator" => "lessThan",
+      "value" => to_string(min_length)
     }
   end
 
   defp blank_condition(%{"id" => part_id, "type" => "janus-input-number"}) do
     %{
-      "fact" => "stage.#{part_id}.userModified",
-      "operator" => "equal",
-      "value" => "false",
-      "type" => 4
+      "fact" => "stage.#{part_id}.value",
+      "operator" => "isNaN",
+      "value" => "true",
+      "type" => 1
     }
   end
 
@@ -460,22 +456,65 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
   end
 
   defp numeric_correct_value(custom) do
-    get_in(custom, ["answer", "correctAnswer"]) || 0
+    answer = Map.get(custom, "answer", %{})
+
+    cond do
+      answer["range"] == true -> answer["correctMin"] || 0
+      Map.has_key?(answer, "correctAnswer") -> answer["correctAnswer"] || 0
+      Map.has_key?(answer, "correct") -> answer["correct"] || 0
+      true -> 0
+    end
   end
 
-  defp slider_correct_value(custom) do
-    get_in(custom, ["answer", "correct"]) || 0
+  defp numeric_value_conditions(part_id, answer, invert?) when is_map(answer) do
+    fact = "stage.#{part_id}.value"
+
+    cond do
+      answer["range"] == true ->
+        min = answer["correctMin"] || 0
+        max = answer["correctMax"] || min
+        operator = if invert?, do: "notInRange", else: "inRange"
+
+        [
+          %{
+            "fact" => fact,
+            "operator" => operator,
+            "value" => "[#{min},#{max}]"
+          }
+        ]
+
+      Map.has_key?(answer, "correctAnswer") ->
+        [
+          %{
+            "fact" => fact,
+            "operator" => if(invert?, do: "notEqual", else: "equal"),
+            "value" => to_string(answer["correctAnswer"])
+          }
+        ]
+
+      Map.has_key?(answer, "correct") ->
+        [
+          %{
+            "fact" => fact,
+            "operator" => if(invert?, do: "notEqual", else: "equal"),
+            "value" => to_string(answer["correct"])
+          }
+        ]
+
+      true ->
+        []
+    end
   end
+
+  defp numeric_value_conditions(_part_id, _answer, _invert?), do: []
 
   defp text_input_correct_conditions(part_id, custom) do
     must_contain = get_in(custom, ["correctAnswer", "mustContain"]) || ""
+    must_not_contain = get_in(custom, ["correctAnswer", "mustNotContain"]) || ""
     min_length = get_in(custom, ["correctAnswer", "minimumLength"]) || 1
 
-    required_terms =
-      must_contain
-      |> String.split(",")
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&(&1 == ""))
+    required_terms = split_csv_terms(must_contain)
+    forbidden_terms = split_csv_terms(must_not_contain)
 
     required_conditions =
       Enum.map(required_terms, fn term ->
@@ -487,14 +526,33 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
         }
       end)
 
+    forbidden_conditions =
+      Enum.map(forbidden_terms, fn term ->
+        %{
+          "fact" => "stage.#{part_id}.text",
+          "operator" => "notContains",
+          "value" => term,
+          "type" => 2
+        }
+      end)
+
     length_condition = %{
       "fact" => "stage.#{part_id}.textLength",
       "operator" => "greaterThanInclusive",
       "value" => to_string(min_length)
     }
 
-    required_conditions ++ [length_condition]
+    required_conditions ++ forbidden_conditions ++ [length_condition]
   end
+
+  defp split_csv_terms(text) when is_binary(text) do
+    text
+    |> String.split(",")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp split_csv_terms(_), do: []
 
   defp max_attempt_condition(max_attempt) do
     %{
@@ -514,7 +572,7 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
     }
   end
 
-  defp set_correct_actions(%{"id" => part_id, "type" => "janus-mcq", "custom" => custom}) do
+  defp set_correct_value_actions(%{"id" => part_id, "type" => "janus-mcq", "custom" => custom}) do
     correct_index = Map.get(custom, "correctAnswer", 0)
 
     [
@@ -526,29 +584,23 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
           "operator" => "=",
           "targetType" => 1
         }
-      },
-      disable_part_action(part_id)
+      }
     ]
   end
 
-  defp set_correct_actions(%{"id" => part_id, "type" => "janus-text-slider", "custom" => custom}) do
-    correct = get_in(custom, ["answer", "correctAnswer"]) || 0
-
-    [
-      %{
-        "type" => "mutateState",
-        "params" => %{
-          "value" => to_string(correct),
-          "target" => "stage.#{part_id}.value",
-          "operator" => "=",
-          "targetType" => 1
-        }
-      },
-      disable_part_action(part_id)
-    ]
+  defp set_correct_value_actions(%{
+         "id" => part_id,
+         "type" => "janus-text-slider",
+         "custom" => custom
+       }) do
+    numeric_set_correct_value_action(part_id, Map.get(custom, "answer", %{}))
   end
 
-  defp set_correct_actions(%{"id" => part_id, "type" => "janus-input-text", "custom" => custom}) do
+  defp set_correct_value_actions(%{
+         "id" => part_id,
+         "type" => "janus-input-text",
+         "custom" => custom
+       }) do
     must_contain = get_in(custom, ["correctAnswer", "mustContain"]) || ""
 
     if must_contain != "" do
@@ -561,49 +613,30 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
             "operator" => "=",
             "targetType" => 2
           }
-        },
-        disable_part_action(part_id)
+        }
       ]
     else
-      [disable_part_action(part_id)]
+      []
     end
   end
 
-  defp set_correct_actions(%{"id" => part_id, "type" => "janus-input-number", "custom" => custom}) do
-    correct = get_in(custom, ["answer", "correctAnswer"]) || 0
-
-    [
-      %{
-        "type" => "mutateState",
-        "params" => %{
-          "value" => to_string(correct),
-          "target" => "stage.#{part_id}.value",
-          "operator" => "=",
-          "targetType" => 1
-        }
-      },
-      disable_part_action(part_id)
-    ]
+  defp set_correct_value_actions(%{
+         "id" => part_id,
+         "type" => "janus-input-number",
+         "custom" => custom
+       }) do
+    numeric_set_correct_value_action(part_id, Map.get(custom, "answer", %{}))
   end
 
-  defp set_correct_actions(%{"id" => part_id, "type" => "janus-slider", "custom" => custom}) do
-    correct = get_in(custom, ["answer", "correct"]) || 0
-
-    [
-      %{
-        "type" => "mutateState",
-        "params" => %{
-          "value" => to_string(correct),
-          "target" => "stage.#{part_id}.value",
-          "operator" => "=",
-          "targetType" => 1
-        }
-      },
-      disable_part_action(part_id)
-    ]
+  defp set_correct_value_actions(%{"id" => part_id, "type" => "janus-slider", "custom" => custom}) do
+    numeric_set_correct_value_action(part_id, Map.get(custom, "answer", %{}))
   end
 
-  defp set_correct_actions(%{"id" => part_id, "type" => "janus-dropdown", "custom" => custom}) do
+  defp set_correct_value_actions(%{
+         "id" => part_id,
+         "type" => "janus-dropdown",
+         "custom" => custom
+       }) do
     [
       %{
         "type" => "mutateState",
@@ -613,25 +646,38 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
           "operator" => "=",
           "targetType" => 1
         }
-      },
-      disable_part_action(part_id)
+      }
     ]
   end
 
-  defp set_correct_actions(_), do: []
+  defp set_correct_value_actions(_), do: []
 
-  defp disable_part_action(%{"id" => part_id}), do: disable_part_action(part_id)
+  defp numeric_set_correct_value_action(part_id, answer) do
+    value =
+      cond do
+        answer["range"] == true -> answer["correctMin"] || 0
+        Map.has_key?(answer, "correctAnswer") -> answer["correctAnswer"] || 0
+        Map.has_key?(answer, "correct") -> answer["correct"] || 0
+        true -> nil
+      end
 
-  defp disable_part_action(part_id) do
-    %{
-      "type" => "mutateState",
-      "params" => %{
-        "value" => "false",
-        "target" => "stage.#{part_id}.enabled",
-        "operator" => "=",
-        "targetType" => 4
-      }
-    }
+    case value do
+      nil ->
+        []
+
+      resolved ->
+        [
+          %{
+            "type" => "mutateState",
+            "params" => %{
+              "value" => to_string(resolved),
+              "target" => "stage.#{part_id}.value",
+              "operator" => "=",
+              "targetType" => 1
+            }
+          }
+        ]
+    end
   end
 
   defp reset_attempts_action do

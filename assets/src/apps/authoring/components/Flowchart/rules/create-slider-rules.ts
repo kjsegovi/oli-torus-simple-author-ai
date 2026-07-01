@@ -90,17 +90,6 @@ export const generateSliderRules = (
     }
   });
 
-  const disableAction: IAction = {
-    // Disables the dropdown so the correct answer can be unselected
-    type: 'mutateState',
-    params: {
-      value: 'false',
-      target: `stage.${question.id}.enabled`,
-      operator: '=',
-      targetType: 4,
-    },
-  };
-
   const answer = question.custom.answer?.range
     ? question.custom.answer.correctMin
     : question.custom.answer?.correctAnswer;
@@ -116,7 +105,6 @@ export const generateSliderRules = (
         targetType: 1,
       },
     },
-    disableAction,
   ];
 
   const blankCondition: ICondition = createCondition(
@@ -132,7 +120,6 @@ export const generateSliderRules = (
     commonErrorConditionsFeedback,
     setCorrect,
     blankCondition,
-    disableAction,
     { maxAttempt: screen?.content?.custom?.maxAttempt || '3' },
   );
 };

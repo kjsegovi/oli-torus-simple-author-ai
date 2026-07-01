@@ -41,6 +41,34 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilderTest do
     assert get_in(max_attempt_rule, ["event", "params", "actions"]) != []
   end
 
+  test "build_rules/3 never adds component disable actions" do
+    spec = %{
+      "component" => "janus-mcq",
+      "label" => "Pick one",
+      "choices" => ["A", "B"],
+      "correct" => 0
+    }
+
+    part = PartBuilders.mcq_part(spec, y: 100)
+
+    for adaptivity <- [
+          %{"maxAttempt" => 3, "onCorrect" => "navigate next", "onIncorrect" => "navigate next"},
+          %{"maxAttempt" => 3, "onCorrect" => "show feedback", "onIncorrect" => "show feedback"}
+        ] do
+      rules = TrapStateRulesBuilder.build_rules(adaptivity, part, [part])
+
+      enabled_targets =
+        rules
+        |> Enum.flat_map(&(get_in(&1, ["event", "params", "actions"]) || []))
+        |> Enum.filter(&(&1["type"] == "mutateState"))
+        |> Enum.map(&get_in(&1, ["params", "target"]))
+        |> Enum.filter(&is_binary/1)
+        |> Enum.filter(&String.ends_with?(&1, ".enabled"))
+
+      assert enabled_targets == []
+    end
+  end
+
   @golden Path.expand("../../../support/google_slides_import/trap_workflow_golden.json", __DIR__)
           |> File.read!()
           |> Jason.decode!()
@@ -182,5 +210,103 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilderTest do
       end)
 
     assert length(set_index_actions) == 2
+  end
+
+  test "build_rules/3 uses text input schema facts for correct, blank, and max-attempt rules" do
+    spec = %{
+      "component" => "janus-input-text",
+      "label" => "Hypothesis",
+      "correctAnswer" => %{
+        "minimumLength" => 3,
+        "mustContain" => "because",
+        "mustNotContain" => "maybe"
+      }
+    }
+
+    part = PartBuilders.input_text_part(spec, y: 100)
+    part_id = part["id"]
+
+    rules =
+      TrapStateRulesBuilder.build_rules(
+        %{"maxAttempt" => 3, "onCorrect" => "show feedback"},
+        part,
+        [part]
+      )
+
+    correct_rule = Enum.find(rules, &(&1["name"] == "correct"))
+    correct_facts = get_in(correct_rule, ["conditions", "all"]) |> Enum.map(& &1["fact"])
+
+    assert "stage.#{part_id}.text" in correct_facts
+    assert "stage.#{part_id}.textLength" in correct_facts
+
+    assert Enum.any?(get_in(correct_rule, ["conditions", "all"]), fn condition ->
+             condition["operator"] == "notContains" and condition["value"] == "maybe"
+           end)
+
+    blank_rule = Enum.find(rules, &(&1["name"] == "blank"))
+    blank_condition = get_in(blank_rule, ["conditions", "all", Access.at(0)])
+
+    assert blank_condition["fact"] == "stage.#{part_id}.textLength"
+    assert blank_condition["operator"] == "lessThan"
+    assert blank_condition["value"] == "3"
+
+    max_attempt_rule = Enum.find(rules, &(&1["name"] == "incorrect-max-attempt"))
+    max_conditions = get_in(max_attempt_rule, ["conditions", "all"])
+
+    assert length(max_conditions) == 1
+    assert hd(max_conditions)["fact"] == "session.attemptNumber"
+  end
+
+  test "build_rules/3 uses isNaN blank and numeric value conditions for input number" do
+    spec = %{
+      "component" => "janus-input-number",
+      "label" => "Count",
+      "correct" => 7
+    }
+
+    part = PartBuilders.input_number_part(spec, y: 100)
+    part_id = part["id"]
+
+    rules = TrapStateRulesBuilder.build_rules(%{"maxAttempt" => 3}, part, [part])
+
+    blank_rule = Enum.find(rules, &(&1["name"] == "blank"))
+    blank_condition = get_in(blank_rule, ["conditions", "all", Access.at(0)])
+
+    assert blank_condition["fact"] == "stage.#{part_id}.value"
+    assert blank_condition["operator"] == "isNaN"
+
+    correct_rule = Enum.find(rules, &(&1["name"] == "correct"))
+    value_condition = get_in(correct_rule, ["conditions", "all", Access.at(0)])
+
+    assert value_condition["fact"] == "stage.#{part_id}.value"
+    assert value_condition["operator"] == "equal"
+    assert value_condition["value"] == "7"
+  end
+
+  test "build_rules/3 supports numeric range answers for sliders" do
+    part = %{
+      "id" => "slider_range_test",
+      "type" => "janus-slider",
+      "custom" => %{
+        "answer" => %{"range" => true, "correctMin" => 2, "correctMax" => 4}
+      }
+    }
+
+    rules = TrapStateRulesBuilder.build_rules(%{"maxAttempt" => 3}, part, [part])
+
+    correct_rule = Enum.find(rules, &(&1["name"] == "correct"))
+    condition = get_in(correct_rule, ["conditions", "all", Access.at(0)])
+
+    assert condition["operator"] == "inRange"
+    assert condition["value"] == "[2,4]"
+
+    max_attempt_rule = Enum.find(rules, &(&1["name"] == "incorrect-max-attempt"))
+
+    set_value_action =
+      max_attempt_rule
+      |> get_in(["event", "params", "actions"])
+      |> Enum.find(&(get_in(&1, ["params", "target"]) == "stage.slider_range_test.value"))
+
+    assert get_in(set_value_action, ["params", "value"]) == "2"
   end
 end

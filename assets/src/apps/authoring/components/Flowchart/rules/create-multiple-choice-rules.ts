@@ -98,17 +98,6 @@ export const generateMultipleChoiceRules = (
     }
   });
 
-  const disableAction: IAction = {
-    // Disables the mcq so the correct answer can not be unselected
-    type: 'mutateState',
-    params: {
-      value: 'false',
-      target: `stage.${question.id}.enabled`,
-      operator: '=',
-      targetType: 4,
-    },
-  };
-
   const setCorrect: IAction[] = [
     {
       // Sets the correct answer in the dropdown
@@ -120,7 +109,6 @@ export const generateMultipleChoiceRules = (
         targetType: 1,
       },
     },
-    disableAction,
   ];
 
   const blankCondition: ICondition = createCondition(
@@ -137,7 +125,6 @@ export const generateMultipleChoiceRules = (
         feedback: correct.feedback || DEFAULT_CORRECT_FEEDBACK,
         destinationId: getSequenceIdFromDestinationPath(path, sequence),
       })),
-      disableAction,
       blankCondition,
     );
   }
@@ -148,7 +135,6 @@ export const generateMultipleChoiceRules = (
     commonErrorConditionsFeedback,
     setCorrect,
     blankCondition,
-    disableAction,
     { maxAttempt: screen?.content?.custom?.maxAttempt || '3' },
   );
 };

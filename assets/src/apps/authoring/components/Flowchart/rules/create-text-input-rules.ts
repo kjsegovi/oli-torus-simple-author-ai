@@ -62,18 +62,7 @@ export const generateTextInputRules = (
       ) || 'unknown',
   };
 
-  const disableAction: IAction = {
-    // Disables the dropdown so the correct answer can be unselected
-    type: 'mutateState',
-    params: {
-      value: 'false',
-      target: `stage.${question.id}.enabled`,
-      operator: '=',
-      targetType: 4,
-    },
-  };
-
-  const setCorrect: IAction[] = [disableAction];
+  const setCorrect: IAction[] = [];
 
   const blankCondition: ICondition = createCondition(
     `stage.${question.id}.textLength`,
@@ -93,7 +82,7 @@ export const generateTextInputRules = (
 
   threeTimesFeedback += 'Click next to continue. ';
 
-  return generateMaxTryWorkflow(correct, incorrect, [], setCorrect, blankCondition, disableAction, {
+  return generateMaxTryWorkflow(correct, incorrect, [], setCorrect, blankCondition, {
     threeTimesFeedback,
     maxAttempt: screen?.content?.custom?.maxAttempt || '3',
   });

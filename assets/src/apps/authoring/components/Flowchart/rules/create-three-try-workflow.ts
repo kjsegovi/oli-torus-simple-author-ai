@@ -15,6 +15,16 @@ import {
 } from './create-generic-rule';
 import { RulesAndVariables } from './rule-compilation';
 
+const withoutComponentLockActions = (actions: IAction[]): IAction[] =>
+  actions.filter(
+    (action) =>
+      !(
+        action.type === 'mutateState' &&
+        typeof action.params?.target === 'string' &&
+        action.params.target.endsWith('.enabled')
+      ),
+  );
+
 /**
  * This will generate rules for a screen that has three attempts to get it right with appropriate feedback loops.
  *
@@ -35,7 +45,6 @@ import { RulesAndVariables } from './rule-compilation';
  * @param commonErrors  - A condition for each common error, it must have either feedback or a destination, and can have both.
  * @param setCorrectAction - an IAction that sets the question on screen to the correct answer.
  * @param blankCondition - A condition that checks if the question is currently blank.
- * @param disableAction - An action that disables the question on screen. This is used when the user is about to be forced to a screen so they don't think they should go and try again
  */
 export const generateMaxTryWorkflow = (
   correct: Required<IConditionWithFeedback>,
@@ -43,7 +52,6 @@ export const generateMaxTryWorkflow = (
   commonErrors: IConditionWithFeedback[],
   setCorrectAction: IAction[],
   blankCondition: ICondition,
-  disableAction: IAction,
   extraOptions: Partial<{
     threeTimesFeedback: string;
     maxAttempt: string;
@@ -56,8 +64,6 @@ export const generateMaxTryWorkflow = (
     ...extraOptions,
   };
 
-  const disableIfTrue = (val: boolean) => (val ? [disableAction] : []);
-
   // [Catch a correct answer]
   correct.destinationId &&
     rules.push({
@@ -68,7 +74,7 @@ export const generateMaxTryWorkflow = (
         true,
         10,
         correct.feedback,
-        [disableAction],
+        [],
       ),
       default: true,
     });
@@ -107,7 +113,7 @@ export const generateMaxTryWorkflow = (
         false,
         30,
         commonError.feedback,
-        disableIfTrue(!!commonError.destinationId),
+        [],
       ),
     );
   }
@@ -126,7 +132,7 @@ export const generateMaxTryWorkflow = (
         extraOptions.maxAttempt == '1' && incorrect.feedback != DEFAULT_INCORRECT_FEEDBACK
           ? incorrect.feedback
           : options.threeTimesFeedback,
-        [...setCorrectAction],
+        withoutComponentLockActions(setCorrectAction),
       ),
     );
 
@@ -141,7 +147,7 @@ export const generateMaxTryWorkflow = (
         false,
         50,
         commonError.feedback,
-        disableIfTrue(!!commonError.destinationId),
+        [],
       ),
     );
   }

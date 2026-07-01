@@ -86,29 +86,17 @@ export const generateDropdownRules = (
     }
   });
 
-  const disableAction: IAction = {
-    // Disables the dropdown so the correct answer can be unselected
-    type: 'mutateState',
-    params: {
-      value: 'false',
-      target: `stage.${question.id}.enabled`,
-      operator: '=',
-      targetType: 4,
-    },
-  };
-
   const setCorrect: IAction[] = [
     {
       // Sets the correct answer in the dropdown
       type: 'mutateState',
       params: {
-        value: String(question.custom.correctAnswer || 1),
+        value: String((question.custom.correctAnswer || 0) + 1),
         target: `stage.${question.id}.selectedIndex`,
         operator: '=',
         targetType: 1,
       },
     },
-    disableAction,
   ];
 
   const blankCondition: ICondition = createCondition(
@@ -124,7 +112,6 @@ export const generateDropdownRules = (
     commonErrorConditionsFeedback,
     setCorrect,
     blankCondition,
-    disableAction,
     { maxAttempt: screen?.content?.custom?.maxAttempt || '3' },
   );
 };
@@ -134,7 +121,7 @@ export const createDropdownCorrectCondition = (question: IDropdownPartLayout): I
     return [
       createCondition(
         `stage.${question.id}.selectedIndex`,
-        String(question.custom.correctAnswer || 1),
+        String((question.custom.correctAnswer || 0) + 1),
         'equal',
       ),
     ];
@@ -148,7 +135,7 @@ export const createDropdownIncorrectCondition = (question: IDropdownPartLayout) 
     return [
       createCondition(
         `stage.${question.id}.selectedIndex`,
-        String(question.custom.correctAnswer || 1),
+        String((question.custom.correctAnswer || 0) + 1),
         'notEqual',
       ),
     ];
