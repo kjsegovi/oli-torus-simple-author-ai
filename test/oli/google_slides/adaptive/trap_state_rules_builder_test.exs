@@ -309,4 +309,33 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilderTest do
 
     assert get_in(set_value_action, ["params", "value"]) == "2"
   end
+
+  test "build_rules/3 max-attempt on mixed text input screens uses attempt count only" do
+    mcq_spec = %{
+      "component" => "janus-mcq",
+      "label" => "Pick one",
+      "choices" => ["A", "B"],
+      "correct" => 0
+    }
+
+    text_spec = %{
+      "component" => "janus-input-text",
+      "label" => "Hypothesis",
+      "correctAnswer" => %{"minimumLength" => 3, "mustContain" => "because"}
+    }
+
+    mcq_part = PartBuilders.mcq_part(mcq_spec, y: 100)
+    text_part = PartBuilders.input_text_part(text_spec, y: 200)
+    parts = [mcq_part, text_part]
+
+    rules =
+      TrapStateRulesBuilder.build_rules(%{"maxAttempt" => 3}, mcq_part, parts, parts)
+
+    max_attempt_rule = Enum.find(rules, &(&1["name"] == "incorrect-max-attempt"))
+    max_conditions = get_in(max_attempt_rule, ["conditions", "all"])
+
+    assert length(max_conditions) == 1
+    assert hd(max_conditions)["fact"] == "session.attemptNumber"
+    refute Map.has_key?(hd(max_conditions), "any")
+  end
 end

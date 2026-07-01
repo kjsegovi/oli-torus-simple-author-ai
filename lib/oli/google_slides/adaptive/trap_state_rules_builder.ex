@@ -160,11 +160,19 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
   end
 
   defp max_attempt_conditions(parts, max_attempt) do
+    base = [max_attempt_condition(max_attempt)]
+
+    if text_input_screen?(parts) do
+      %{"all" => base}
+    else
+      build_max_attempt_part_conditions(parts, base)
+    end
+  end
+
+  defp build_max_attempt_part_conditions(parts, base) do
     part_incorrect =
       parts
       |> Enum.flat_map(&max_attempt_incorrect_conditions/1)
-
-    base = [max_attempt_condition(max_attempt)]
 
     case part_incorrect do
       [] ->
@@ -180,6 +188,10 @@ defmodule Oli.GoogleSlides.Adaptive.TrapStateRulesBuilder do
           %{"all" => base ++ many}
         end
     end
+  end
+
+  defp text_input_screen?(parts) do
+    Enum.any?(parts, &(&1["type"] == "janus-input-text"))
   end
 
   defp max_attempt_incorrect_conditions(%{"type" => "janus-input-text"}), do: []
