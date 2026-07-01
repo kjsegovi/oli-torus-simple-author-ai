@@ -53,7 +53,8 @@ defmodule Oli.GoogleSlides.NotesParser do
           {:ok, bracket_result} ->
             %{
               component_spec: bracket_result.component_spec,
-              additional_component_specs: Map.get(bracket_result, :additional_component_specs, []),
+              additional_component_specs:
+                Map.get(bracket_result, :additional_component_specs, []),
               adaptivity: bracket_result.adaptivity,
               warnings: bracket_result.warnings
             }
@@ -62,7 +63,12 @@ defmodule Oli.GoogleSlides.NotesParser do
             if llm_fallback do
               llm_fallback(notes_text, slide_context, warnings, slide_index)
             else
-              %{component_spec: nil, additional_component_specs: [], adaptivity: nil, warnings: warnings}
+              %{
+                component_spec: nil,
+                additional_component_specs: [],
+                adaptivity: nil,
+                warnings: warnings
+              }
             end
         end
     end
@@ -119,6 +125,9 @@ defmodule Oli.GoogleSlides.NotesParser do
   defp normalize_component("janus-mcq"), do: "janus-mcq"
   defp normalize_component("mcq"), do: "janus-mcq"
   defp normalize_component("multiple_choice"), do: "janus-mcq"
+  defp normalize_component("janus-capi-iframe"), do: "janus-capi-iframe"
+  defp normalize_component("iframe"), do: "janus-capi-iframe"
+  defp normalize_component("capi-iframe"), do: "janus-capi-iframe"
   defp normalize_component(other), do: other
 
   defp llm_fallback(notes_text, slide_context, warnings, slide_index) do

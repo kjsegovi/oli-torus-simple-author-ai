@@ -18,7 +18,7 @@ defmodule Oli.GoogleSlides.BracketNotesParser do
       [Any not modified Feedback] Make sure to complete all settings...
   """
 
-  @component_decl ~r/\[(multiple choice component|dropdown components?|numeric slider component(?:\s*:\s*([^\]]+))?|slider component(?:\s*:\s*([^\]]+))?|text slider component(?:\s*:\s*([^\]]+))?|text input component(?:\s*:\s*([^\]]+))?|number input component(?:\s*:\s*([^\]]+))?)\]/i
+  @component_decl ~r/\[(multiple choice component|dropdown components?|iframe component(?:\s*:\s*([^\]]+))?|numeric slider component(?:\s*:\s*([^\]]+))?|slider component(?:\s*:\s*([^\]]+))?|text slider component(?:\s*:\s*([^\]]+))?|text input component(?:\s*:\s*([^\]]+))?|number input component(?:\s*:\s*([^\]]+))?)\]/i
 
   @legacy_component_tag ~r/\[(multiple choice component|dropdown components?|slider component)\]/i
 
@@ -163,6 +163,14 @@ defmodule Oli.GoogleSlides.BracketNotesParser do
         [_] = match
         %{type: :number_input, label: nil}
 
+      match = Regex.run(~r/^iframe component\s*:\s*(.+)$/i, inner) ->
+        [_, value] = match
+        iframe_declaration_value(value)
+
+      match = Regex.run(~r/^iframe component$/i, inner) ->
+        [_] = match
+        %{type: :iframe, label: nil, src: nil}
+
       match = Regex.run(~r/^slider component\s*:\s*(.+)$/i, inner) ->
         [_, label] = match
         %{type: :slider, label: trim_label(label)}
@@ -185,7 +193,26 @@ defmodule Oli.GoogleSlides.BracketNotesParser do
 
   defp trim_label(_), do: nil
 
-  defp declaration_key(%{type: type, label: label}), do: {type, normalize_text(label || "")}
+  defp iframe_declaration_value(value) do
+    trimmed = String.trim(value || "")
+
+    if iframe_url?(trimmed) do
+      %{type: :iframe, label: nil, src: trimmed}
+    else
+      %{type: :iframe, label: trim_label(trimmed), src: nil}
+    end
+  end
+
+  defp iframe_url?(value) when is_binary(value) do
+    Regex.match?(~r/^https?:\/\//i, String.trim(value))
+  end
+
+  defp iframe_url?(_), do: false
+
+  defp declaration_key(%{type: type, label: label, src: src}),
+    do: {type, normalize_text(label || ""), src || ""}
+
+  defp declaration_key(%{type: type, label: label}), do: {type, normalize_text(label || ""), ""}
 
   defp infer_text_sliders_from_feedback(tags) do
     tags
@@ -275,6 +302,13 @@ defmodule Oli.GoogleSlides.BracketNotesParser do
     resolved_label = label || "Number"
 
     case build_number_input_spec(resolved_label, tags) do
+      nil -> []
+      spec -> [spec]
+    end
+  end
+
+  defp build_specs_for_declaration(%{type: :iframe} = decl, tags, _slide_context) do
+    case build_iframe_spec(decl, tags) do
       nil -> []
       spec -> [spec]
     end
@@ -524,6 +558,42 @@ defmodule Oli.GoogleSlides.BracketNotesParser do
       "incorrectFeedback" =>
         part_incorrect_feedback(tags, label) || default_incorrect_feedback(tags)
     }
+  end
+
+  defp build_iframe_spec(%{src: src}, tags) when is_binary(src) and src != "" do
+    iframe_spec(src, tags)
+  end
+
+  defp build_iframe_spec(%{label: label}, tags) when is_binary(label) and label != "" do
+    if iframe_url?(label) do
+      iframe_spec(label, tags)
+    else
+      iframe_spec_from_tags(tags)
+    end
+  end
+
+  defp build_iframe_spec(_, tags), do: iframe_spec_from_tags(tags)
+
+  defp iframe_spec_from_tags(tags) do
+    case Map.get(tags, "iframe url") do
+      url when is_binary(url) and url != "" -> iframe_spec(url, tags)
+      _ -> nil
+    end
+  end
+
+  defp iframe_spec(src, tags) do
+    %{
+      "component" => "janus-capi-iframe",
+      "src" => String.trim(src),
+      "allowScrolling" => iframe_allow_scrolling?(tags)
+    }
+  end
+
+  defp iframe_allow_scrolling?(tags) do
+    case Map.get(tags, "iframe scrolling") do
+      value when value in ["true", "yes", "on", "1"] -> true
+      _ -> false
+    end
   end
 
   defp text_slider_options(label, tags) do

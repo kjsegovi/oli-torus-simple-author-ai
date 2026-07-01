@@ -10,6 +10,7 @@ defmodule Oli.GoogleSlides.SlideComponentDetectorTest do
       title_from_placeholder: false,
       paragraphs: ["Which option is correct?"],
       list_items: ["Alpha", "Beta", "Gamma"],
+      content_blocks: [],
       images: [],
       raw_elements: [],
       notes_text: ""
@@ -29,6 +30,7 @@ defmodule Oli.GoogleSlides.SlideComponentDetectorTest do
       title_from_placeholder: false,
       paragraphs: ["Adjust the value"],
       list_items: [],
+      content_blocks: [],
       images: [],
       raw_elements: [],
       notes_text: "Use a slider from 0 to 100"

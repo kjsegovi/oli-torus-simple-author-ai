@@ -156,12 +156,9 @@ defmodule Oli.GoogleSlides.AdaptiveScreenBuilder do
       end
 
     {parts, y, warnings} =
-      Enum.reduce(display_paragraphs(slide.paragraphs), {parts, y, warnings}, fn paragraph,
-                                                                                 {acc, y_acc,
-                                                                                  warn} ->
-        part = PartBuilders.text_flow(paragraph, :p, y: y_acc)
-        {acc ++ [part], y_acc + 110, warn}
-      end)
+      slide.content_blocks
+      |> content_blocks_for_render(component_specs)
+      |> render_content_blocks(parts, y, warnings, media_urls, slide.index)
 
     {parts, y, warnings, component_parts} =
       Enum.reduce(component_specs, {parts, y, warnings, []}, fn spec,
@@ -182,31 +179,117 @@ defmodule Oli.GoogleSlides.AdaptiveScreenBuilder do
         end
       end)
 
-    {parts, _y, warnings} =
-      Enum.reduce(slide.images, {parts, y, warnings}, fn image, {acc, y_acc, warn} ->
-        case Map.get(media_urls, image.object_id) do
-          url when is_binary(url) ->
-            part = PartBuilders.image_part(url, y: y_acc)
-            {acc ++ [part], y_acc + 220, warn}
-
-          _ ->
-            {acc, y_acc,
-             warn ++
-               [
-                 Warnings.build(:media_upload_failed, %{
-                   slide_index: slide.index,
-                   reason: "missing uploaded url"
-                 })
-               ]}
-        end
-      end)
-
     {parts, component_parts, warnings}
   end
 
-  defp display_paragraphs(paragraphs) do
-    Enum.reject(paragraphs, &BracketNotesParser.placeholder_line?/1)
+  defp content_blocks_for_render(content_blocks, component_specs) when is_list(content_blocks) do
+    skip_lists? =
+      Enum.any?(component_specs, fn spec ->
+        Map.get(spec, "component") in ["janus-mcq", "janus-dropdown"]
+      end)
+
+    if skip_lists? do
+      Enum.reject(content_blocks, &match?(%{type: "list"}, &1))
+    else
+      content_blocks
+    end
   end
+
+  defp content_blocks_for_render(_, _), do: []
+
+  defp render_content_blocks(content_blocks, parts, y, warnings, media_urls, slide_index) do
+    Enum.reduce(content_blocks, {parts, y, warnings}, fn block, {acc, y_acc, warn} ->
+      case block do
+        %{type: "paragraph", text: text} ->
+          if BracketNotesParser.placeholder_line?(text) do
+            {acc, y_acc, warn}
+          else
+            part = PartBuilders.text_flow(text, :p, y: y_acc)
+            {acc ++ [part], y_acc + 110, warn}
+          end
+
+        %{type: "heading", tag: tag, text: text} ->
+          part = PartBuilders.text_flow(text, heading_tag(tag), y: y_acc)
+          {acc ++ [part], y_acc + heading_offset(tag), warn}
+
+        %{type: "table", text: text} ->
+          part = PartBuilders.text_flow(text, :p, y: y_acc)
+          {acc ++ [part], y_acc + 110, warn}
+
+        %{type: "list", items: items, list_type: list_type} ->
+          visible_items = Enum.reject(items, &BracketNotesParser.placeholder_line?/1)
+
+          if visible_items == [] do
+            {acc, y_acc, warn}
+          else
+            part = PartBuilders.list_flow(visible_items, list_type, y: y_acc)
+            height = max(length(visible_items) * 28, 48)
+            {acc ++ [part], y_acc + height + 12, warn}
+          end
+
+        %{type: "image", ref: image} = block ->
+          case Map.get(media_urls, image.object_id) do
+            url when is_binary(url) ->
+              height = image_part_height(image)
+              alt = Map.get(block, :alt, "Slide image")
+
+              part = PartBuilders.image_part(url, y: y_acc, height: height, alt: alt)
+              {acc ++ [part], y_acc + height + 20, warn}
+
+            _ ->
+              {acc, y_acc,
+               warn ++
+                 [
+                   Warnings.build(:media_upload_failed, %{
+                     slide_index: slide_index,
+                     reason: "missing uploaded url"
+                   })
+                 ]}
+          end
+
+        %{type: "video", src: src} = block ->
+          height = Map.get(block, :height, 280)
+          alt = Map.get(block, :alt, "Slide video")
+          part = PartBuilders.video_part(src, y: y_acc, height: height, alt: alt)
+          {acc ++ [part], y_acc + height + 20, warn}
+
+        %{type: "word_art", text: text} ->
+          part = PartBuilders.text_flow(text, :h1, y: y_acc)
+          {acc ++ [part], y_acc + 48, warn}
+
+        _ ->
+          {acc, y_acc, warn}
+      end
+    end)
+  end
+
+  defp heading_tag("h1"), do: :h1
+  defp heading_tag("h2"), do: :h2
+  defp heading_tag("h3"), do: :h3
+  defp heading_tag("h4"), do: :h4
+  defp heading_tag("h5"), do: :h5
+  defp heading_tag("h6"), do: :h6
+  defp heading_tag(_), do: :p
+
+  defp heading_offset("h1"), do: 44
+  defp heading_offset("h2"), do: 40
+  defp heading_offset("h3"), do: 36
+  defp heading_offset("h4"), do: 32
+  defp heading_offset("h5"), do: 28
+  defp heading_offset("h6"), do: 24
+  defp heading_offset(_), do: 32
+
+  @slides_emu_per_px 9525.0
+
+  defp image_part_height(%{height: height}) when is_number(height) and height > 0 do
+    height
+    |> Kernel./(@slides_emu_per_px)
+    |> min(400.0)
+    |> max(80.0)
+    |> trunc()
+  end
+
+  defp image_part_height(_), do: 200
 
   defp build_component_part(%{"component" => "janus-text-slider"} = spec, y),
     do: {PartBuilders.text_slider_part(spec, y: y), 90}
@@ -225,6 +308,9 @@ defmodule Oli.GoogleSlides.AdaptiveScreenBuilder do
 
   defp build_component_part(%{"component" => "janus-dropdown"} = spec, y),
     do: {PartBuilders.dropdown_part(spec, y: y), 100}
+
+  defp build_component_part(%{"component" => "janus-capi-iframe"} = spec, y),
+    do: {PartBuilders.iframe_part(spec, y: y), 340}
 
   defp build_component_part(_spec, _y), do: nil
 end

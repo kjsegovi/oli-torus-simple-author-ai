@@ -4,7 +4,6 @@ defmodule Oli.GoogleSlides.SlideComponentDetector do
   """
 
   alias Oli.GoogleSlides.PresentationParser.Slide
-  alias Oli.GoogleSlides.Warnings
 
   @mcq_min_choices 2
   @mcq_max_choices 6
@@ -16,14 +15,12 @@ defmodule Oli.GoogleSlides.SlideComponentDetector do
 
   @spec detect(Slide.t()) :: detect_result()
   def detect(%Slide{} = slide) do
-    warnings = unsupported_element_warnings(slide)
-
     component_spec =
       detect_mcq(slide) ||
         detect_slider_from_text(slide.notes_text) ||
         detect_slider_from_text(Enum.join(slide.paragraphs, "\n"))
 
-    %{component_spec: component_spec, warnings: warnings}
+    %{component_spec: component_spec, warnings: []}
   end
 
   defp detect_mcq(%Slide{list_items: items} = slide) when length(items) >= @mcq_min_choices do
@@ -79,28 +76,4 @@ defmodule Oli.GoogleSlides.SlideComponentDetector do
   end
 
   defp detect_slider_from_text(_), do: nil
-
-  defp unsupported_element_warnings(%Slide{raw_elements: elements, index: index}) do
-    elements
-    |> Enum.flat_map(&unsupported_element_type/1)
-    |> Enum.uniq()
-    |> Enum.map(fn element_type ->
-      Warnings.build(:unsupported_element, %{slide_index: index, element_type: element_type})
-    end)
-  end
-
-  defp unsupported_element_type(%{"video" => _}), do: ["video"]
-  defp unsupported_element_type(%{"sheetsChart" => _}), do: ["chart"]
-  defp unsupported_element_type(%{"line" => _}), do: ["line"]
-  defp unsupported_element_type(%{"wordArt" => _}), do: ["wordArt"]
-
-  defp unsupported_element_type(%{"shape" => shape}) do
-    if Map.has_key?(shape, "placeholder") do
-      []
-    else
-      ["shape"]
-    end
-  end
-
-  defp unsupported_element_type(_), do: []
 end

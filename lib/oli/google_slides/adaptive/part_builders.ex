@@ -23,11 +23,11 @@ defmodule Oli.GoogleSlides.Adaptive.PartBuilders do
     "lineStyle" => 0.0
   }
 
-  @spec text_flow(String.t(), :h4 | :p, keyword()) :: map()
+  @spec text_flow(String.t(), :h1 | :h2 | :h3 | :h4 | :h5 | :h6 | :p, keyword()) :: map()
   def text_flow(text, tag \\ :p, opts \\ []) do
     y = Keyword.get(opts, :y, 0)
     width = Keyword.get(opts, :width, 960)
-    height = if tag == :h4, do: 22, else: 96
+    height = text_flow_height(tag)
 
     %{
       "id" => Util.new_id("text"),
@@ -44,6 +44,91 @@ defmodule Oli.GoogleSlides.Adaptive.PartBuilders do
         "visible" => true,
         "width" => 100,
         "responsiveLayoutWidth" => width,
+        "x" => 0,
+        "y" => y,
+        "z" => 0
+      }
+    }
+  end
+
+  @spec list_flow([String.t()], :ul | :ol | String.t(), keyword()) :: map()
+  def list_flow(items, list_type \\ :ul, opts \\ []) do
+    y = Keyword.get(opts, :y, 0)
+    width = Keyword.get(opts, :width, 960)
+    tag = if list_type in [:ol, "ol"], do: "ol", else: "ul"
+    height = max(length(items) * 28, 48)
+
+    %{
+      "id" => Util.new_id("text"),
+      "type" => "janus-text-flow",
+      "custom" => %{
+        "customCssClass" => "",
+        "height" => height,
+        "maxScore" => 1,
+        "nodes" => [list_nodes(tag, items)],
+        "overrideHeight" => false,
+        "overrideWidth" => true,
+        "palette" => @transparent_palette,
+        "requiresManualGrading" => false,
+        "visible" => true,
+        "width" => 100,
+        "responsiveLayoutWidth" => width,
+        "x" => 0,
+        "y" => y,
+        "z" => 0
+      }
+    }
+  end
+
+  @spec iframe_part(map(), keyword()) :: map()
+  def iframe_part(spec, opts \\ []) do
+    y = Keyword.get(opts, :y, 0)
+    height = Keyword.get(opts, :height, 320)
+
+    %{
+      "id" => Util.new_id("iframe"),
+      "type" => "janus-capi-iframe",
+      "custom" => %{
+        "allowScrolling" => Map.get(spec, "allowScrolling", false),
+        "configData" => [],
+        "customCssClass" => "",
+        "height" => height,
+        "maxScore" => 1,
+        "requiresManualGrading" => false,
+        "responsiveLayoutWidth" => 960,
+        "src" => Map.get(spec, "src", ""),
+        "width" => 100,
+        "x" => 0,
+        "y" => y,
+        "z" => 0
+      }
+    }
+  end
+
+  @spec video_part(String.t(), keyword()) :: map()
+  def video_part(src, opts \\ []) do
+    y = Keyword.get(opts, :y, 0)
+    height = Keyword.get(opts, :height, 280)
+
+    %{
+      "id" => Util.new_id("video"),
+      "type" => "janus-video",
+      "custom" => %{
+        "alt" => Keyword.get(opts, :alt, "Slide video"),
+        "autoPlay" => false,
+        "customCssClass" => "",
+        "enableReplay" => true,
+        "enabled" => true,
+        "endTime" => 0,
+        "height" => height,
+        "maxScore" => 1,
+        "requiresManualGrading" => false,
+        "responsiveLayoutWidth" => 960,
+        "src" => src,
+        "startTime" => 0,
+        "subtitles" => %{},
+        "triggerCheck" => false,
+        "width" => 100,
         "x" => 0,
         "y" => y,
         "z" => 0
@@ -304,7 +389,9 @@ defmodule Oli.GoogleSlides.Adaptive.PartBuilders do
          "janus-text-slider",
          "janus-dropdown",
          "janus-input-number",
-         "janus-input-text"
+         "janus-input-text",
+         "janus-video",
+         "janus-capi-iframe"
        ] do
       base
       |> Map.put("gradingApproach", "automatic")
@@ -333,7 +420,7 @@ defmodule Oli.GoogleSlides.Adaptive.PartBuilders do
   end
 
   defp text_nodes(tag, text) do
-    tag_str = Atom.to_string(tag)
+    tag_str = if is_atom(tag), do: Atom.to_string(tag), else: tag
 
     [
       %{
@@ -351,4 +438,38 @@ defmodule Oli.GoogleSlides.Adaptive.PartBuilders do
       }
     ]
   end
+
+  defp list_nodes(tag, items) do
+    %{
+      "tag" => tag,
+      "style" => %{},
+      "children" => Enum.map(items, &list_item_node/1)
+    }
+  end
+
+  defp list_item_node(text) do
+    %{
+      "tag" => "li",
+      "style" => %{},
+      "children" => [
+        %{
+          "tag" => "span",
+          "style" => %{},
+          "children" => [
+            %{"tag" => "text", "text" => text, "children" => []}
+          ]
+        }
+      ]
+    }
+  end
+
+  defp text_flow_height(:h1), do: 36
+  defp text_flow_height(:h2), do: 32
+  defp text_flow_height(:h3), do: 28
+  defp text_flow_height(:h4), do: 22
+  defp text_flow_height(:h5), do: 20
+  defp text_flow_height(:h6), do: 18
+  defp text_flow_height(:p), do: 96
+  defp text_flow_height("h" <> _), do: 24
+  defp text_flow_height(_), do: 96
 end

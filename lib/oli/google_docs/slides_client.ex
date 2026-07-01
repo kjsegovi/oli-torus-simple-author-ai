@@ -177,13 +177,18 @@ defmodule Oli.GoogleDocs.SlidesClient do
     end
   end
 
-  @spec fetch_image_bytes(String.t(), String.t()) :: {:ok, binary()} | {:error, term()}
+  @spec fetch_image_bytes(String.t(), String.t()) ::
+          {:ok, binary(), String.t() | nil} | {:error, term()}
   def fetch_image_bytes(content_url, access_token) do
-    headers = auth_headers(access_token)
+    headers = [
+      {"authorization", "Bearer #{access_token}"},
+      {"accept", "*/*"}
+    ]
 
     case Oli.HTTP.http().get(content_url, headers, []) do
-      {:ok, %Response{status_code: 200, body: body}} when is_binary(body) ->
-        {:ok, body}
+      {:ok, %Response{status_code: 200, body: body, headers: response_headers}}
+      when is_binary(body) ->
+        {:ok, body, content_type_from_headers(response_headers)}
 
       {:ok, %Response{status_code: status, body: body}} ->
         {:error, {:http_status, status, body}}
@@ -191,6 +196,15 @@ defmodule Oli.GoogleDocs.SlidesClient do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  defp content_type_from_headers(headers) do
+    headers
+    |> Enum.find_value(fn
+      {"content-type", value} -> value |> String.split(";") |> hd() |> String.trim()
+      {"Content-Type", value} -> value |> String.split(";") |> hd() |> String.trim()
+      _ -> nil
+    end)
   end
 
   defp auth_headers(access_token) do

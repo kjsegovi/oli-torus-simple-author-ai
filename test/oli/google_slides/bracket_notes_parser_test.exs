@@ -176,6 +176,36 @@ defmodule Oli.GoogleSlides.BracketNotesParserTest do
     assert Enum.all?(specs, &(&1["component"] == "janus-text-slider"))
   end
 
+  test "parse/2 builds iframe component from declaration tag and iframe url tag" do
+    notes = """
+    [Iframe URL] https://example.com/simulation
+    [Iframe Scrolling] true
+    """
+
+    slide_context = %{
+      paragraphs: ["[Iframe component: Lab Simulation]"],
+      list_items: []
+    }
+
+    assert {:ok, result} = BracketNotesParser.parse(notes, slide_context)
+
+    assert result.component_spec["component"] == "janus-capi-iframe"
+    assert result.component_spec["src"] == "https://example.com/simulation"
+    assert result.component_spec["allowScrolling"] == true
+  end
+
+  test "parse/2 builds iframe component when url is inline in declaration tag" do
+    slide_context = %{
+      paragraphs: ["[Iframe component: https://example.com/embed]"],
+      list_items: []
+    }
+
+    assert {:ok, result} = BracketNotesParser.parse("", slide_context)
+
+    assert result.component_spec["component"] == "janus-capi-iframe"
+    assert result.component_spec["src"] == "https://example.com/embed"
+  end
+
   test "placeholder_line?/1 detects component placeholders" do
     assert BracketNotesParser.placeholder_line?("[Multiple choice component]")
     refute BracketNotesParser.placeholder_line?("What is the answer?")
